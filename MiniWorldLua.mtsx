@@ -1,0 +1,126 @@
+// 适用于mt管理器，为迷你世界而打造
+{
+    name: ["Lua", ".lua"]
+    styles: [
+        //          浅色模式  深色模式
+        "comment" #51585F, #6A737D @I
+        "label" #40659E, #607FAF
+        "keyword2" #129494, #35BCBC
+        "string" #415A32, #6A8759
+        "number" #2D5675, #6897BB
+        "type" #7D6C0A, #B89F12
+        "internally installed" #198E6D, #1EE0AA
+        "constant" #6B5477, #9876AA
+        "keyword" #824A1B, #CC7832
+        "namespace" #644375, #9876AA
+        "variable" #325662, #508090
+        "operator" #377D89, #65D8ED
+        "func_call" #317480, #5BC4D7
+        "class_name" #1D5D5D, #23A2A2
+        "method_name" #7F694C, #D2B48C
+        "self_class" #628321, #A3DE2E
+        "colon" #715E46, #D2B48C
+        "color_value", #000000#333333, #A9B7C6#2B2B2B
+        // "argument" #802284, #EA42AB
+        // "default" #000000, #CEE0AA
+        
+        // 快捷颜色 #  WRYGKB
+        "red_bg", #FF0000, #FF0000
+        "white_bg", #EEEEEE, #FFFFFF
+        "yellow_bg", #FFFF00, #FFFF00
+        "green_bg", #00FF00, #00FF00
+        "black_bg", #000000, #000000
+        "blue_bg", #0000FF, #0000FF
+    ]
+    defines: [
+        // "string_suffix": /(?=[^\"']+)/
+        "string_suffix": /(?)/
+        "color_load": [
+            {match: /#c([a-fA-F0-9]{6})/ + include("string_suffix"), 0: "parseColor(1,_,HEX,color_value)"}
+            {match: /#([a-fA-F0-9]{6})/ + include("string_suffix"), 0: "parseColor(1,_,HEX,color_value)"}
+            {match: /0x([a-fA-F0-9]{6})\b/ + include("string_suffix"), 0: "parseColor(1,_,HEX,color_value)"}
+            {match: /#R/ + include("string_suffix"), 0: "red_bg"}
+            {match: /#W/ + include("string_suffix"), 0: "white_bg"}
+            {match: /#Y/ + include("string_suffix"), 0: "yellow_bg"}
+            {match: /#G/ + include("string_suffix"), 0: "green_bg"}
+            {match: /#K/ + include("string_suffix"), 0: "black_bg"}
+            {match: /#B/ + include("string_suffix"), 0: "blue_bg"}
+        ]
+    ]
+    comment: {startsWith: "--", addToContains: false}
+    contains: [
+        // 首先匹配注释（优先级最高）
+        {
+            start: {match: /--\[\[/}
+            end: {match: /\]\]/}
+            style: "comment"
+            mustMatchEnd: false
+        }
+        {match: /--(?!\[\[).*/, 0: "comment"}
+        
+        // 在任何地方匹配颜色值
+        {include: "color_load"}
+        
+        // 字符串匹配
+        { // "..."
+            start: {match: /"/}
+            end: {match: /(?m)"|$/}
+            style: "string"
+            contains: [
+                {include: "color_load"}
+                {match: /\\./, 0: "strEscape"}
+            ]
+        }
+        { // '...'
+            start: {match: /'/}
+            end: {match: /(?m)'|$/}
+            style: "string"
+            contains: [
+                {include: "color_load"}
+                {match: /\\./, 0: "strEscape"}
+            ]
+        }
+        { // [=[...]=]
+            match: /\[(=*)\[([\s\S]*?)\]\1\]/
+            0: "string"
+            1: "string"
+            2: {
+                group: select,
+                contains: [
+                    {include: "color_load"}
+                ]
+            }
+        }
+        // {builtin: #C_QUOTED_STRING#}
+        
+        // 其他语法匹配
+        {match: /::[_a-zA-Z][_a-zA-Z\d]*::/, 0: "label"}
+        {match: /\b__[_a-zA-Z\d]+\b/, 0: "keyword2"}
+        
+        {number: "10|16|F|E|P"}
+        {match: keywordsToRegex("local"), 0: "type"}
+        {match: keywordsToRegex("true false nil"), 0: "constant"}
+        {match: keywordsToRegex("return then while and break goto do else elseif end for function if in not or repeat until table math string threadpool coroutine os io debug require"), 0: "keyword"}
+        {match: keywordsToRegex("_G _VERSION _ENV"), 0: "internally installed"}
+        
+        // 1. 先匹配 self:method() 调用
+        {match: /\b(self)(:)([\u4E00-\u9FA5_a-zA-Z][\u4E00-\u9FA5_a-zA-Z\d]*(?=\s*\())/, 1: "self_class", 2: "colon", 3: "method_name"}
+        
+        {match: keywordsToRegex("self"), 0: "self_class"}
+        
+        // 2. 匹配链式类方法调用 a.b.c.d:func()
+        {match: /([\u4E00-\u9FA5_a-zA-Z][\u4E00-\u9FA5_a-zA-Z\d]*(?:\.[\u4E00-\u9FA5_a-zA-Z][\u4E00-\u9FA5_a-zA-Z\d]*)*)(:)([\u4E00-\u9FA5_a-zA-Z][\u4E00-\u9FA5_a-zA-Z\d]*(?=\s*\())/, 1: "class_name", 2: "colon", 3: "method_name"}
+        
+        // 3. 匹配普通类方法调用 obj:func()
+        {match: /([\u4E00-\u9FA5_a-zA-Z][\u4E00-\u9FA5_a-zA-Z\d]*)(:)([\u4E00-\u9FA5_a-zA-Z][\u4E00-\u9FA5_a-zA-Z\d]*(?=\s*\())/, 1: "class_name", 2: "colon", 3: "method_name"}
+        
+        // 4. 匹配链式函数调用 a.b.c.d()
+        {match: /\b([\u4E00-\u9FA5_a-zA-Z][\u4E00-\u9FA5_a-zA-Z\d]*)(?=\s*\()/, 1: "func_call"}
+        
+        // 5. 匹配普通函数调用 func()
+        {match: /\b([\u4E00-\u9FA5_a-zA-Z][\u4E00-\u9FA5_a-zA-Z\d]*(?=\s*\())/, 1: "func_call"}
+        {match: /(?<!\.)\.(?=[\u4E00-\u9FA5_a-zA-Z])/, 0: "namespace"}
+        {match: /(?<!:):[\u4E00-\u9FA5_a-zA-Z][\u4E00-\u9FA5_a-zA-Z\d]*\b/, 0: "variable"}
+        {match: /#(?=[\u4E00-\u9FA5_a-zA-Z])/, 0: "operator"}
+    ]
+}
